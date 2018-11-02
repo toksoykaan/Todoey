@@ -7,12 +7,15 @@
 //
 
 import UIKit
+import CoreData
 
 class TodoListViewController: UITableViewController {
-    var itemArray = [Items]() //Items classından object yaratıyoruz...
+    var itemArray = [Item]() //Items classından object yaratıyoruz...
     let defaults = UserDefaults.standard
-    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")//Plist'in kaydedileceği memorydeki yer
     
+    //Context bizimle database arasındaki katman, değişiklikleri buraya gönderip, sonra DB'ya paslıyoruz.
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+
     override func viewDidLoad() {
         super.viewDidLoad()
         loadItems()
@@ -38,7 +41,14 @@ class TodoListViewController: UITableViewController {
     //Hangi cell'i seçti onu belirliyoruz ve done mu değil mi onun özelliğini belirliyoruz
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         //YANİ ZATEN CHECKMARKI OLAN ŞEYE TIKLARSAN NONE YAPIYO OLMAYANA TIKLARSAN CHECK KOYUYO
-        itemArray[indexPath.row].done = !itemArray[indexPath.row].done
+        //itemArray[indexPath.row].done = !itemArray[indexPath.row].done
+        
+        
+        //DELETE sıra önemli iki kodun
+        context.delete(itemArray[indexPath.row]) //Remove from permenant store
+        itemArray.remove(at: indexPath.row) //Remove from array
+        
+        
         saveItems()
         tableView.deselectRow(at: indexPath, animated: true)
     }
@@ -47,12 +57,14 @@ class TodoListViewController: UITableViewController {
     @IBAction func addButtonPressed(_ sender: UIBarButtonItem){
         var textField = UITextField()
         let alert = UIAlertController(title: "Add New Todo Item", message: "", preferredStyle: .alert)
+        //             Delegate'a ulaşmamızı sağlayan singleton ->   persistantContainer'ın view contexti
+        
         
         let action = UIAlertAction(title: "Add Item", style: .default) { (action) in
             //What will happen once the user clicks the Add Item button on our UIAlert
-            let newItem = Items()
+            let newItem = Item(context: self.context) //NSManaged Object -> ROWS
             newItem.title = textField.text!
-            
+            newItem.done = false
             self.itemArray.append(newItem)
         
             self.saveItems()
@@ -69,10 +81,8 @@ class TodoListViewController: UITableViewController {
     //MARK - Model Manupulation Method -> Adds the Item added and edited to Plist
     //Encode ediyoruz (plak'a yazıyoruz müziği)
     func saveItems() {
-        let encoder = PropertyListEncoder()
         do{
-            let data = try encoder.encode(itemArray)
-            try data.write(to: dataFilePath!)
+           try context.save() // Context aradaki katman gibi biz yazıyoruz içine , sonra save ediyoruz burdan
         }catch{
             print(error)
         }
@@ -80,14 +90,15 @@ class TodoListViewController: UITableViewController {
     }
     //Decode yapıyoruz, plakı takıp müzik dinliyoruz.
     func loadItems() {
-        if let data = try? Data(contentsOf: dataFilePath!){
-            let decoder = PropertyListDecoder()
-            do{
-            itemArray = try decoder.decode([Items].self, from: data)
-            }catch{
-                print(error)
-            }
+        //Data basedeki itemleri getiriyoruz..
+        let request : NSFetchRequest<Item> = Item.fetchRequest() //DATA TYPE VERMEK ZORUNDAYIZ BURDA
+        do{
+        itemArray = try context.fetch(request)
+        }catch{
+            print(error)
+        }
     }
+    
 }
-}
+
 
